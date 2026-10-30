@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#0f6e56">
+<title>Geotag Kunjungan AO - Bank SAU</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f3f4f2;color:#1f2a24;font-size:16px}
+header{background:#0f6e56;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:5}
+header b{font-size:17px;display:block}
+header small{opacity:.85}
+main{padding:14px;max-width:560px;margin:auto}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:14px;border:1px solid #e1e4e0}
+label{display:block;font-size:14px;color:#4a5650;margin:10px 0 4px}
+input,select,textarea{width:100%;padding:11px;border:1px solid #c9cfca;border-radius:8px;font-size:16px;font-family:inherit;background:#fff}
+textarea{resize:none;height:70px}
+.cnt{text-align:right;font-size:12px;color:#7a847e}
+button{font-family:inherit;font-size:16px;border:0;border-radius:10px;padding:13px;width:100%;cursor:pointer}
+.primary{background:#0f6e56;color:#fff;font-weight:600}
+.primary:disabled{background:#9bb8ae}
+.wa{background:#1fa855;color:#fff;font-weight:600}
+.ghost{background:#eef1ee;color:#1f2a24}
+.small{padding:8px 10px;font-size:14px;width:auto}
+.row{display:flex;gap:8px}
+.status{font-size:14px;padding:10px;border-radius:8px;margin-top:10px;display:none}
+.status.info{display:block;background:#e6f1fb;color:#0c447c}
+.status.err{display:block;background:#fcebeb;color:#791f1f}
+.status.ok{display:block;background:#e1f5ee;color:#085041}
+.visit{display:flex;gap:10px;border-top:1px solid #eceeec;padding:10px 0}
+.visit:first-child{border-top:0}
+.visit img{width:84px;height:84px;object-fit:cover;border-radius:8px;flex:none}
+.visit .t{font-size:14px;line-height:1.4;flex:1;min-width:0}
+.visit .t b{font-size:15px}
+.muted{color:#6b756f;font-size:13px}
+.pill{display:inline-block;background:#e1f5ee;color:#085041;border-radius:20px;padding:1px 8px;font-size:12px}
+.warn{background:#faeeda;color:#633806}
+h3{margin:0 0 6px;font-size:16px}
+#setup{display:none}
+details summary{cursor:pointer;color:#0f6e56;font-size:14px}
+</style>
+</head>
+<body>
+<header><b>Geotag Kunjungan AO</b><small id="hdrAO">PT BPR Surya Artha Utama (Perseroda)</small></header>
+<main>
+
+<div class="card" id="setup">
+  <h3>Pengaturan awal</h3>
+  <div class="muted">Diisi sekali saja. Nama ini tercetak di setiap foto.</div>
+  <label>Nama lengkap AO</label>
+  <input id="sNama" placeholder="contoh: Budi Santoso" autocomplete="name">
+  <label>Kantor / cabang</label>
+  <input id="sKantor" placeholder="contoh: Kantor Pusat">
+  <div style="height:12px"></div>
+  <button class="primary" onclick="simpanSetup()">Simpan</button>
+  <div class="status" id="st0"></div>
+</div>
+
+<div id="app" style="display:none">
+<div class="card">
+  <h3>Kunjungan baru</h3>
+  <label>Nama nasabah / calon nasabah</label>
+  <input id="fNasabah" maxlength="60" placeholder="contoh: Ibu Siti (warung kopi)">
+  <label>Jenis kegiatan</label>
+  <select id="fKegiatan">
+    <option value="">— pilih —</option>
+    <option>Prospek calon nasabah baru</option>
+    <option>Survei / OTS kredit</option>
+    <option>Penagihan angsuran</option>
+    <option>Penagihan kredit bermasalah</option>
+    <option>Pemeliharaan nasabah</option>
+    <option>Lainnya</option>
+  </select>
+  <label>Keterangan singkat</label>
+  <textarea id="fKet" maxlength="100" placeholder="contoh: survei usaha warung, omzet ±3jt/hr, layak lanjut"></textarea>
+  <div class="cnt"><span id="cnt">0</span>/100</div>
+  <input type="file" id="cam" accept="image/*" capture="environment" style="display:none">
+  <button class="primary" id="btnFoto" onclick="mulaiFoto()">AMBIL FOTO &amp; SIMPAN</button>
+  <div class="status" id="st"></div>
+</div>
+
+<div class="card">
+  <div class="row" style="align-items:center;justify-content:space-between">
+    <h3 style="margin:0">Kunjungan <span id="lblTgl"></span></h3>
+    <input type="date" id="tgl" style="width:auto;padding:6px">
+  </div>
+  <div id="list" style="margin-top:8px"></div>
+  <div style="height:10px"></div>
+  <button class="wa" id="btnKirim" onclick="kirim()">KIRIM LAPORAN KE WA</button>
+  <div class="status" id="st2"></div>
+</div>
+
+<div class="card">
+  <details><summary>Cara pakai &amp; pengaturan</summary>
+  <ol style="font-size:14px;padding-left:18px;line-height:1.6">
+    <li>Nyalakan GPS / Lokasi HP dan izinkan akses lokasi &amp; kamera.</li>
+    <li>Di lokasi nasabah: isi nama, pilih kegiatan, tulis keterangan singkat.</li>
+    <li>Tekan <b>Ambil foto</b>. Foto harus langsung dari kamera.</li>
+    <li>Sore hari tekan <b>Kirim laporan ke WA</b>, pilih WhatsApp, kirim ke Kepala SKAI.</li>
+  </ol>
+  <div class="muted">Data tersimpan di HP ini. Jangan hapus data browser Chrome sebelum laporan terkirim.</div>
+  <div style="height:8px"></div>
+  <button class="ghost small" onclick="ubahSetup()">Ubah nama AO</button>
+  </details>
+</div>
+</div>
+</main>
+
+<script>
+const SALT='BANKSAU-SKAI-GEOTAG-v1';
+const HARI=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+let DB;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('geotag_ao',1);r.onupgradeneeded=()=>{const s=r.result.createObjectStore('kunjungan',{keyPath:'id'});s.createIndex('tanggal','tanggal')};r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)})}
+function tx(mode){return DB.transaction('kunjungan',mode).objectStore('kunjungan')}
+function dbPut(o){return new Promise((res,rej)=>{const r=tx('readwrite').put(o);r.onsuccess=res;r.onerror=()=>rej(r.error)})}
+function dbDel(id){return new Promise(res=>{tx('readwrite').delete(id).onsuccess=res})}
+function dbByDate(d){return new Promise(res=>{const r=tx('readonly').index('tanggal').getAll(d);r.onsuccess=()=>res(r.result.sort((a,b)=>a.waktu.localeCompare(b.waktu)))})}
+
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const tglLokal=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const jamLokal=d=>pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+const fmtTgl=s=>{const [y,m,d]=s.split('-');return d+'/'+m+'/'+y};
+function setStatus(el,cls,msg){el.className='status '+cls;el.innerHTML=msg}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function profil(){try{return JSON.parse(localStorage.getItem('ao_profil'))}catch(e){return null}}
+function simpanSetup(){const n=$('sNama').value.trim();if(n.length<3){alertBox('Isi nama lengkap AO');return}
+  localStorage.setItem('ao_profil',JSON.stringify({nama:n,kantor:$('sKantor').value.trim()}));tampil()}
+function ubahSetup(){const p=profil()||{};$('sNama').value=p.nama||'';$('sKantor').value=p.kantor||'';$('setup').style.display='block';$('app').style.display='none'}
+function alertBox(m){setStatus($('st0'),'err',m)}
+function tampil(){const p=profil();if(!p){$('setup').style.display='block';$('app').style.display='none';return}
+  $('setup').style.display='none';$('app').style.display='block';$('hdrAO').textContent='AO: '+p.nama+(p.kantor?' • '+p.kantor:'');render()}
+
+$('fKet').addEventListener('input',e=>$('cnt').textContent=e.target.value.length);
+$('tgl').value=tglLokal(new Date());
+$('tgl').addEventListener('change',render);
+
+/* GPS warm-up supaya cepat dapat titik */
+let lastPos=null;
+if('geolocation' in navigator){navigator.geolocation.watchPosition(p=>lastPos=p,()=>{},{enableHighAccuracy:true,maximumAge:0,timeout:60000})}
+
+function mulaiFoto(){
+  const st=$('st');
+  if(!$('fNasabah').value.trim()){setStatus(st,'err','Isi nama nasabah dulu.');return}
+  if(!$('fKegiatan').value){setStatus(st,'err','Pilih jenis kegiatan dulu.');return}
+  if(!$('fKet').value.trim()){setStatus(st,'err','Isi keterangan singkat dulu.');return}
+  if(!('geolocation' in navigator)){setStatus(st,'err','HP ini tidak mendukung GPS di browser.');return}
+  $('cam').value='';$('cam').click();
+}
+
+function ambilGPS(){return new Promise((res,rej)=>{
+  navigator.geolocation.getCurrentPosition(res,err=>{
+    if(lastPos&&Date.now()-lastPos.timestamp<60000)res(lastPos);else rej(err)},
+    {enableHighAccuracy:true,timeout:20000,maximumAge:15000})})}
+
+async function cariAlamat(lat,lon){
+  const ctl=new AbortController();const t=setTimeout(()=>ctl.abort(),8000);
+  try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&accept-language=id`,{signal:ctl.signal});
+    if(!r.ok)return '';const j=await r.json();const a=j.address||{};
+    const tempat=j.name&&j.name!==a.road?j.name:'';
+    const parts=[tempat,a.road&&(a.road+(a.house_number?' '+a.house_number:'')),a.neighbourhood||a.hamlet,a.village||a.suburb,a.city_district,a.city||a.town||a.county].filter(Boolean);
+    return [...new Set(parts)].join(', ')||j.display_name||'';
+  }catch(e){return ''}finally{clearTimeout(t)}}
+
+function muatGambar(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=u})}
+
+function wrap(ctx,text,maxW){const words=text.split(' ');const lines=[];let cur='';
+  for(const w of words){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width>maxW&&cur){lines.push(cur);cur=w}else cur=t}
+  if(cur)lines.push(cur);return lines}
+
+function capFoto(img,v){
+  const W=Math.min(img.naturalWidth,1280);const H=Math.round(img.naturalHeight*W/img.naturalWidth);
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+  x.drawImage(img,0,0,W,H);
+  const fs=Math.max(14,Math.round(W/34));x.font=`600 ${fs}px sans-serif`;
+  const pad=Math.round(fs*.6);const maxW=W-pad*2;
+  const d=new Date(v.waktu);
+  let lines=[
+    'BANK SAU • AO: '+v.ao,
+    HARI[d.getDay()]+', '+fmtTgl(v.tanggal)+' '+jamLokal(d)+' WIB',
+    'Lat '+v.lat.toFixed(6)+', Long '+v.lon.toFixed(6)+' (±'+Math.round(v.akurasi)+' m)'];
+  lines=lines.concat(wrap(x,v.alamat||'(alamat belum terbaca)',maxW).slice(0,2));
+  lines=lines.concat(wrap(x,v.nasabah+' • '+v.kegiatan,maxW).slice(0,2));
+  const lh=Math.round(fs*1.3);const boxH=lines.length*lh+pad*2;
+  x.fillStyle='rgba(0,0,0,.58)';x.fillRect(0,H-boxH,W,boxH);
+  x.fillStyle='#fff';x.textBaseline='top';
+  lines.forEach((l,i)=>{x.font=(i===0?'700 ':'500 ')+fs+'px sans-serif';x.fillText(l,pad,H-boxH+pad+i*lh)});
+  return c;
+}
+function kecilkan(canvas,w,q){const s=Math.min(1,w/canvas.width);const c=document.createElement('canvas');
+  c.width=Math.round(canvas.width*s);c.height=Math.round(canvas.height*s);c.getContext('2d').drawImage(canvas,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',q)}
+
+$('cam').addEventListener('change',async e=>{
+  const file=e.target.files[0];if(!file)return;
+  const st=$('st');const btn=$('btnFoto');btn.disabled=true;
+  try{
+    const umur=Date.now()-(file.lastModified||0);
+    if(file.lastModified&&umur>10*60*1000){setStatus(st,'err','Foto ditolak: bukan foto baru dari kamera. Ambil foto langsung di lokasi.');return}
+    setStatus(st,'info','Mengambil titik GPS…');
+    let pos;try{pos=await ambilGPS()}catch(err){setStatus(st,'err','GPS gagal: '+(err.code===1?'izin lokasi ditolak. Izinkan lokasi untuk situs ini di Chrome.':'sinyal GPS lemah, coba di tempat terbuka lalu ulangi.'));return}
+    const p=profil();const now=new Date();
+    const v={id:now.getTime()+'-'+Math.random().toString(36).slice(2,7),ao:p.nama,kantor:p.kantor||'',
+      tanggal:tglLokal(now),waktu:now.toISOString(),jam:jamLokal(now),
+      lat:pos.coords.latitude,lon:pos.coords.longitude,akurasi:pos.coords.accuracy,gpsWaktu:new Date(pos.timestamp).toISOString(),
+      nasabah:$('fNasabah').value.trim(),kegiatan:$('fKegiatan').value,ket:$('fKet').value.trim(),alamat:''};
+    setStatus(st,'info','Mencari alamat terdekat…');
+    v.alamat=await cariAlamat(v.lat,v.lon);
+    setStatus(st,'info','Membuat cap geotag…');
+    const img=await muatGambar(file);const cv=capFoto(img,v);
+    v.foto=kecilkan(cv,520,.6);
+    await dbPut(v);
+    simpanKeGaleri(cv,v);
+    $('fNasabah').value='';$('fKegiatan').value='';$('fKet').value='';$('cnt').textContent='0';
+    $('tgl').value=v.tanggal;await render();
+    setStatus(st,'ok','Tersimpan ✓ '+v.jam+(v.alamat?'<br>'+esc(v.alamat):'<br>Alamat belum terbaca (tanpa sinyal) — koordinat tetap tercatat.'));
+  }catch(err){setStatus(st,'err','Gagal: '+esc(err.message||err))}
+  finally{btn.disabled=false}
+});
+
+function simpanKeGaleri(cv,v){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);
+  a.download='GEOTAG_'+v.ao.replace(/\W+/g,'_')+'_'+v.tanggal+'_'+v.jam.replace(/:/g,'')+'.jpg';document.body.appendChild(a);a.click();a.remove()},'image/jpeg',.85)}
+
+async function render(){
+  const d=$('tgl').value;$('lblTgl').textContent=fmtTgl(d);
+  const rows=await dbByDate(d);const L=$('list');
+  if(!rows.length){L.innerHTML='<div class="muted">Belum ada kunjungan di tanggal ini.</div>';$('btnKirim').disabled=true;return}
+  $('btnKirim').disabled=false;
+  L.innerHTML=rows.map((v,i)=>`<div class="visit"><img src="${v.foto}" alt="">
+    <div class="t"><b>${i+1}. ${esc(v.nasabah)}</b> <span class="muted">${v.jam.slice(0,5)}</span><br>
+    <span class="pill">${esc(v.kegiatan)}</span><br>${esc(v.ket)}<br>
+    <span class="muted">${v.alamat?esc(v.alamat):'<span class="pill warn">alamat belum terbaca</span>'} • ±${Math.round(v.akurasi)} m</span>
+    ${v.terkirim?'<br><span class="pill">sudah dikirim</span>':''}</div>
+    <button class="ghost small" onclick="hapus('${v.id}')" aria-label="hapus">✕</button></div>`).join('');
+}
+async function hapus(id){if(confirm('Hapus kunjungan ini?')){await dbDel(id);render()}}
+
+async function sha256(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+
+async function kirim(){
+  const st=$('st2');const d=$('tgl').value;const rows=await dbByDate(d);if(!rows.length)return;
+  const p=profil();
+  // coba lengkapi alamat yang kosong
+  for(const v of rows){if(!v.alamat){setStatus(st,'info','Melengkapi alamat…');v.alamat=await cariAlamat(v.lat,v.lon);if(v.alamat)await dbPut(v)}}
+  const kunjungan=rows.map(({terkirim,...v})=>v);
+  const isi={app:'geotag-ao-banksau',versi:1,ao:p.nama,kantor:p.kantor||'',tanggal:d,dibuat:new Date().toISOString(),jumlah:kunjungan.length,kunjungan};
+  isi.hash=await sha256(SALT+JSON.stringify([isi.ao,isi.tanggal,kunjungan]));
+  const nama='LAPORAN_AO_'+p.nama.replace(/\W+/g,'_')+'_'+d+'.txt';
+  const file=new File([JSON.stringify(isi)],nama,{type:'text/plain'});
+  siap={file,nama,rows,teks:'Laporan kunjungan AO '+p.nama+' tgl '+fmtTgl(d)+' ('+kunjungan.length+' kunjungan)'};
+  await bagikan();
+}
+let siap=null;
+async function bagikan(){
+  const st=$('st2');const {file,nama,rows,teks}=siap;
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:nama,text:teks});
+      setStatus(st,'ok','Laporan '+rows.length+' kunjungan sudah dibagikan ✓');
+    }else{const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=nama;document.body.appendChild(a);a.click();a.remove();
+      setStatus(st,'info','File tersimpan di folder Download: <b>'+esc(nama)+'</b>. Kirim file itu lewat WA (lampiran Dokumen).')}
+    for(const v of rows){v.terkirim=true;await dbPut(v)}render();
+  }catch(e){
+    if(e.name==='NotAllowedError')setStatus(st,'info','Laporan siap. <button class="wa small" onclick="bagikan()">Bagikan ke WA sekarang</button>');
+    else if(e.name!=='AbortError')setStatus(st,'err','Gagal kirim: '+esc(e.message));
+  }
+}
+
+openDB().then(tampil).catch(e=>document.body.innerHTML='<p style="padding:20px">Browser tidak mendukung penyimpanan: '+e+'</p>');
+</script>
+</body>
+</html>
