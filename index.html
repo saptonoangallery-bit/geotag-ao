@@ -109,7 +109,11 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
   </ol>
   <div class="muted">Data tersimpan di HP ini. Jangan hapus data browser Chrome sebelum laporan terkirim.</div>
   <div style="height:8px"></div>
-  <button class="ghost small" onclick="ubahSetup()">Ubah nama AO</button>
+  <div class="row">
+    <button class="ghost small" onclick="ubahSetup()">Ubah nama AO</button>
+    <button class="ghost small" style="color:#a32d2d" onclick="resetApp()">Reset aplikasi</button>
+  </div>
+  <div class="status" id="st3"></div>
   </details>
 </div>
 </div>
@@ -274,6 +278,16 @@ async function bagikan(){
     if(e.name==='NotAllowedError')setStatus(st,'info','Laporan siap. <button class="wa small" onclick="bagikan()">Bagikan ke WA sekarang</button>');
     else if(e.name!=='AbortError')setStatus(st,'err','Gagal kirim: '+esc(e.message));
   }
+}
+
+function dbAll(){return new Promise(res=>{const r=tx('readonly').getAll();r.onsuccess=()=>res(r.result)})}
+async function resetApp(){
+  const st=$('st3');const all=await dbAll();const belum=all.filter(v=>!v.terkirim);
+  if(belum.length){const tgl=[...new Set(belum.map(v=>fmtTgl(v.tanggal)))].join(', ');
+    setStatus(st,'err','Reset ditolak: masih ada <b>'+belum.length+' kunjungan belum terkirim</b> (tgl '+tgl+'). Kirim laporan dulu.');return}
+  if(!confirm('Hapus SEMUA data kunjungan dan nama AO di HP ini?\n\nSemua laporan sudah terkirim. Foto di folder Download tidak ikut terhapus.'))return;
+  await new Promise(res=>{const r=tx('readwrite').clear();r.onsuccess=res});
+  localStorage.removeItem('ao_profil');location.reload();
 }
 
 openDB().then(tampil).catch(e=>document.body.innerHTML='<p style="padding:20px">Browser tidak mendukung penyimpanan: '+e+'</p>');
