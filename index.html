@@ -223,8 +223,8 @@ $('cam').addEventListener('change',async e=>{
     setStatus(st,'info','Membuat cap geotag…');
     const img=await muatGambar(file);const cv=capFoto(img,v);
     v.foto=kecilkan(cv,520,.6);
+    v.fotoBesar=cv.toDataURL('image/jpeg',.85);
     await dbPut(v);
-    simpanKeGaleri(cv,v);
     $('fNasabah').value='';$('fRek').value='';$('fKegiatan').value='';$('fKet').value='';$('cnt').textContent='0';
     $('tgl').value=v.tanggal;await render();
     setStatus(st,'ok','Tersimpan ✓ '+v.jam+(v.alamat?'<br>'+esc(v.alamat):'<br>Alamat belum terbaca (tanpa sinyal) — koordinat tetap tercatat.'));
@@ -232,8 +232,10 @@ $('cam').addEventListener('change',async e=>{
   finally{btn.disabled=false}
 });
 
-function simpanKeGaleri(cv,v){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);
-  a.download='GEOTAG_'+v.ao.replace(/\W+/g,'_')+'_'+v.tanggal+'_'+v.jam.replace(/:/g,'')+'.jpg';document.body.appendChild(a);a.click();a.remove()},'image/jpeg',.85)}
+async function simpanFoto(id){
+  const v=await new Promise(res=>{const r=tx('readonly').get(id);r.onsuccess=()=>res(r.result)});
+  const a=document.createElement('a');a.href=v.fotoBesar||v.foto;
+  a.download='GEOTAG_'+v.ao.replace(/\W+/g,'_')+'_'+v.tanggal+'_'+v.jam.replace(/:/g,'')+'.jpg';document.body.appendChild(a);a.click();a.remove()}
 
 async function render(){
   const d=$('tgl').value;$('lblTgl').textContent=fmtTgl(d);
@@ -244,7 +246,8 @@ async function render(){
     <div class="t"><b>${i+1}. ${esc(v.nasabah)}</b>${v.rek?' <span class="muted">('+esc(v.rek)+')</span>':''} <span class="muted">${v.jam.slice(0,5)}</span><br>
     <span class="pill">${esc(v.kegiatan)}</span><br>${esc(v.ket)}<br>
     <span class="muted">${v.alamat?esc(v.alamat):'<span class="pill warn">alamat belum terbaca</span>'} • ±${Math.round(v.akurasi)} m</span>
-    ${v.terkirim?'<br><span class="pill">sudah dikirim</span>':''}</div>
+    ${v.terkirim?'<br><span class="pill">sudah dikirim</span>':''}
+    <br><button class="ghost small" style="margin-top:6px;padding:5px 10px" onclick="simpanFoto('${v.id}')">Simpan foto</button></div>
     <button class="ghost small" onclick="hapus('${v.id}')" aria-label="hapus">✕</button></div>`).join('');
 }
 async function hapus(id){if(confirm('Hapus kunjungan ini?')){await dbDel(id);render()}}
@@ -256,7 +259,7 @@ async function kirim(){
   const p=profil();
   // coba lengkapi alamat yang kosong
   for(const v of rows){if(!v.alamat){setStatus(st,'info','Melengkapi alamat…');v.alamat=await cariAlamat(v.lat,v.lon);if(v.alamat)await dbPut(v)}}
-  const kunjungan=rows.map(({terkirim,...v})=>v);
+  const kunjungan=rows.map(({terkirim,fotoBesar,...v})=>v);
   const isi={app:'geotag-ao-banksau',versi:1,ao:p.nama,kantor:p.kantor||'',tanggal:d,dibuat:new Date().toISOString(),jumlah:kunjungan.length,kunjungan};
   isi.hash=await sha256(SALT+JSON.stringify([isi.ao,isi.tanggal,kunjungan]));
   const nama='LAPORAN_AO_'+p.nama.replace(/\W+/g,'_')+'_'+d+'.txt';
