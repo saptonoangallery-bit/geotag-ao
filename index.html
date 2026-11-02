@@ -122,12 +122,26 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
 <script>
 const SALT='BANKSAU-SKAI-GEOTAG-v1';
 const HARI=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-let DB;
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('geotag_ao',1);r.onupgradeneeded=()=>{const s=r.result.createObjectStore('kunjungan',{keyPath:'id'});s.createIndex('tanggal','tanggal')};r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)})}
-function tx(mode){return DB.transaction('kunjungan',mode).objectStore('kunjungan')}
-function dbPut(o){return new Promise((res,rej)=>{const r=tx('readwrite').put(o);r.onsuccess=res;r.onerror=()=>rej(r.error)})}
-function dbDel(id){return new Promise(res=>{tx('readwrite').delete(id).onsuccess=res})}
-function dbByDate(d){return new Promise(res=>{const r=tx('readonly').index('tanggal').getAll(d);r.onsuccess=()=>res(r.result.sort((a,b)=>a.waktu.localeCompare(b.waktu)))})}
+let DB=null;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('geotag_ao',1);r.onupgradeneeded=()=>{const s=r.result.createObjectStore('kunjungan',{keyPath:'id'});s.createIndex('tanggal','tanggal')};
+  r.onsuccess=()=>{DB=r.result;DB.onclose=()=>{DB=null};DB.onversionchange=()=>{try{DB.close()}catch(e){}DB=null};res()};r.onerror=()=>rej(r.error)})}
+/* operasi penyimpanan dengan sambung-ulang otomatis bila koneksi ditutup browser (mis. setelah kamera) */
+async function op(mode,fn){
+  for(let i=0;i<3;i++){
+    try{
+      if(!DB)await openDB();
+      return await new Promise((res,rej)=>{const t=DB.transaction('kunjungan',mode);const r=fn(t.objectStore('kunjungan'));
+        let hasil;r.onsuccess=()=>{hasil=r.result};t.oncomplete=()=>res(hasil);t.onerror=()=>rej(t.error||r.error);t.onabort=()=>rej(t.error||new Error('transaksi dibatalkan'))});
+    }catch(e){try{DB&&DB.close()}catch(_){}DB=null;if(i===2)throw e;await new Promise(r=>setTimeout(r,300))}
+  }
+}
+const dbPut=o=>op('readwrite',s=>s.put(o));
+const dbDel=id=>op('readwrite',s=>s.delete(id));
+const dbGet=id=>op('readonly',s=>s.get(id));
+const dbAll=()=>op('readonly',s=>s.getAll());
+const dbClear=()=>op('readwrite',s=>s.clear());
+const dbByDate=d=>op('readonly',s=>s.index('tanggal').getAll(d)).then(r=>r.sort((a,b)=>a.waktu.localeCompare(b.waktu)));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!DB)openDB().catch(()=>{})});
 
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,'0');
@@ -233,7 +247,7 @@ $('cam').addEventListener('change',async e=>{
 });
 
 async function simpanFoto(id){
-  const v=await new Promise(res=>{const r=tx('readonly').get(id);r.onsuccess=()=>res(r.result)});
+  const v=await dbGet(id);
   const a=document.createElement('a');a.href=v.fotoBesar||v.foto;
   a.download='GEOTAG_'+v.ao.replace(/\W+/g,'_')+'_'+v.tanggal+'_'+v.jam.replace(/:/g,'')+'.jpg';document.body.appendChild(a);a.click();a.remove()}
 
@@ -283,13 +297,12 @@ async function bagikan(){
   }
 }
 
-function dbAll(){return new Promise(res=>{const r=tx('readonly').getAll();r.onsuccess=()=>res(r.result)})}
 async function resetApp(){
   const st=$('st3');const all=await dbAll();const belum=all.filter(v=>!v.terkirim);
   if(belum.length){const tgl=[...new Set(belum.map(v=>fmtTgl(v.tanggal)))].join(', ');
     setStatus(st,'err','Reset ditolak: masih ada <b>'+belum.length+' kunjungan belum terkirim</b> (tgl '+tgl+'). Kirim laporan dulu.');return}
   if(!confirm('Hapus SEMUA data kunjungan dan nama AO di HP ini?\n\nSemua laporan sudah terkirim. Foto di folder Download tidak ikut terhapus.'))return;
-  await new Promise(res=>{const r=tx('readwrite').clear();r.onsuccess=res});
+  await dbClear();
   localStorage.removeItem('ao_profil');location.reload();
 }
 
