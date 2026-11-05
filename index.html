@@ -41,6 +41,15 @@ button{font-family:inherit;font-size:16px;border:0;border-radius:10px;padding:13
 .warn{background:#faeeda;color:#633806}
 h3{margin:0 0 6px;font-size:16px}
 #setup{display:none}
+.visit img{cursor:zoom-in}
+.chk{width:26px;height:26px;flex:none;margin-top:28px;accent-color:#a32d2d}
+.selbar{display:none;gap:8px;margin-top:8px;flex-wrap:wrap}
+.selbar.on{display:flex}
+.danger{background:#a32d2d;color:#fff;font-weight:600}
+#zoom{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:50;align-items:center;justify-content:center;flex-direction:column}
+#zoom.on{display:flex}
+#zoom img{max-width:100%;max-height:85vh;object-fit:contain}
+#zoom button{margin-top:12px;width:auto;padding:10px 24px}
 details summary{cursor:pointer;color:#0f6e56;font-size:14px}
 </style>
 </head>
@@ -78,6 +87,8 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
     <option>Penagihan angsuran</option>
     <option>Penagihan kredit bermasalah</option>
     <option>Pemeliharaan nasabah</option>
+    <option>Funding Sekolah</option>
+    <option>Funding Pasar</option>
     <option>Lainnya</option>
   </select>
   <label>Keterangan singkat</label>
@@ -93,10 +104,17 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
     <h3 style="margin:0">Kunjungan <span id="lblTgl"></span></h3>
     <input type="date" id="tgl" style="width:auto;padding:6px">
   </div>
+  <div class="selbar" id="selbar">
+    <button class="ghost small" onclick="pilihSemua()">Pilih semua yang sudah terkirim</button>
+    <button class="ghost small" onclick="modeHapus(false)">Batal</button>
+    <button class="danger small" id="btnHapusSel" onclick="hapusTerpilih()">🗑 Hapus 0 terpilih</button>
+  </div>
   <div id="list" style="margin-top:8px"></div>
   <div style="height:10px"></div>
   <button class="wa" id="btnKirim" onclick="kirim()">KIRIM LAPORAN KE WA</button>
   <div class="status" id="st2"></div>
+  <div style="height:8px"></div>
+  <button class="ghost small" id="btnModeHapus" style="width:100%" onclick="modeHapus(true)">🗑 Hapus riwayat tanggal ini (yang sudah terkirim)</button>
 </div>
 
 <div class="card">
@@ -119,6 +137,7 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
 </div>
 </main>
 
+<div id="zoom" onclick="tutupZoom()"><img id="zoomImg" alt=""><button class="ghost" onclick="tutupZoom()">Tutup</button></div>
 <script>
 const SALT='BANKSAU-SKAI-GEOTAG-v1';
 const HARI=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
@@ -190,16 +209,24 @@ async function cariAlamat(lat,lon){
     return [...new Set(parts)].join(', ')||j.display_name||'';
   }catch(e){return ''}finally{clearTimeout(t)}}
 
-function muatGambar(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=u})}
+function muatGambarImg(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const i=new Image();i.onload=()=>res({src:i,w:i.naturalWidth,h:i.naturalHeight,done:()=>URL.revokeObjectURL(u)});i.onerror=()=>rej(new Error('foto tidak bisa dibaca'));i.src=u})}
+/* baca foto langsung dalam ukuran kecil supaya hemat RAM (HP RAM kecil / kamera resolusi tinggi) */
+async function muatGambar(file){
+  if(window.createImageBitmap){
+    try{const b=await createImageBitmap(file,{imageOrientation:'from-image',resizeWidth:1280,resizeQuality:'medium'});
+      if(b.width>b.height*0.2)return {src:b,w:b.width,h:b.height,done:()=>b.close()}}catch(e){}
+  }
+  return muatGambarImg(file);
+}
 
 function wrap(ctx,text,maxW){const words=text.split(' ');const lines=[];let cur='';
   for(const w of words){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width>maxW&&cur){lines.push(cur);cur=w}else cur=t}
   if(cur)lines.push(cur);return lines}
 
 function capFoto(img,v){
-  const W=Math.min(img.naturalWidth,1280);const H=Math.round(img.naturalHeight*W/img.naturalWidth);
+  const W=Math.min(img.w,1280);const H=Math.round(img.h*W/img.w);
   const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
-  x.drawImage(img,0,0,W,H);
+  x.drawImage(img.src,0,0,W,H);
   const fs=Math.max(14,Math.round(W/34));x.font=`600 ${fs}px sans-serif`;
   const pad=Math.round(fs*.6);const maxW=W-pad*2;
   const d=new Date(v.waktu);
@@ -235,14 +262,19 @@ $('cam').addEventListener('change',async e=>{
     setStatus(st,'info','Mencari alamat terdekat…');
     v.alamat=await cariAlamat(v.lat,v.lon);
     setStatus(st,'info','Membuat cap geotag…');
-    const img=await muatGambar(file);const cv=capFoto(img,v);
+    const img=await muatGambar(file);const cv=capFoto(img,v);img.done();
     v.foto=kecilkan(cv,520,.6);
-    v.fotoBesar=cv.toDataURL('image/jpeg',.85);
+    v.fotoBesar=cv.toDataURL('image/jpeg',.8);cv.width=cv.height=1;
     await dbPut(v);
     $('fNasabah').value='';$('fRek').value='';$('fKegiatan').value='';$('fKet').value='';$('cnt').textContent='0';
     $('tgl').value=v.tanggal;await render();
     setStatus(st,'ok','Tersimpan ✓ '+v.jam+(v.alamat?'<br>'+esc(v.alamat):'<br>Alamat belum terbaca (tanpa sinyal) — koordinat tetap tercatat.'));
-  }catch(err){setStatus(st,'err','Gagal: '+esc(err.message||err))}
+  }catch(err){
+    const m=String(err&&(err.name+' '+err.message)||err);
+    if(/quota|memory|memori|allocation|out of/i.test(m))
+      setStatus(st,'err','Gagal: memori/penyimpanan HP tidak cukup.<br>• Tutup aplikasi lain lalu coba lagi<br>• Turunkan ukuran foto di setelan Kamera (mis. 12 MP)<br>• Hapus riwayat yang sudah terkirim (tombol 🗑 di bawah)<br>• Hapus video/foto lama di HP');
+    else setStatus(st,'err','Gagal: '+esc(err.message||err)+'<br>Tarik layar ke bawah (refresh) lalu coba lagi.');
+  }
   finally{btn.disabled=false}
 });
 
@@ -256,15 +288,34 @@ async function render(){
   const rows=await dbByDate(d);const L=$('list');
   if(!rows.length){L.innerHTML='<div class="muted">Belum ada kunjungan di tanggal ini.</div>';$('btnKirim').disabled=true;return}
   $('btnKirim').disabled=false;
-  L.innerHTML=rows.map((v,i)=>`<div class="visit"><img src="${v.foto}" alt="">
+  hapusMode=hapusMode&&rows.some(v=>v.terkirim);$('selbar').classList.toggle('on',hapusMode);$('btnModeHapus').style.display=hapusMode?'none':'';
+  L.innerHTML=rows.map((v,i)=>`<div class="visit">${hapusMode?(v.terkirim?`<input type="checkbox" class="chk" data-id="${v.id}" onchange="hitungSel()">`:`<span class="chk" title="belum dikirim" style="font-size:20px">⛔</span>`):''}<img src="${v.foto}" alt="" onclick="zoomFoto('${v.id}')">
     <div class="t"><b>${i+1}. ${esc(v.nasabah)}</b>${v.rek?' <span class="muted">('+esc(v.rek)+')</span>':''} <span class="muted">${v.jam.slice(0,5)}</span><br>
     <span class="pill">${esc(v.kegiatan)}</span><br>${esc(v.ket)}<br>
     <span class="muted">${v.alamat?esc(v.alamat):'<span class="pill warn">alamat belum terbaca</span>'} • ±${Math.round(v.akurasi)} m</span>
-    ${v.terkirim?'<br><span class="pill">sudah dikirim</span>':''}
+    ${v.terkirim?'<br><span class="pill">sudah dikirim</span>':'<br><span class="pill warn">belum dikirim</span>'}
     <br><button class="ghost small" style="margin-top:6px;padding:5px 10px" onclick="simpanFoto('${v.id}')">Simpan foto</button></div>
-    <button class="ghost small" onclick="hapus('${v.id}')" aria-label="hapus">✕</button></div>`).join('');
+    ${!v.terkirim&&!hapusMode?`<button class="ghost small" onclick="hapus('${v.id}')" aria-label="hapus">✕</button>`:''}</div>`).join('');
+  hitungSel();
 }
-async function hapus(id){if(confirm('Hapus kunjungan ini?')){await dbDel(id);render()}}
+let hapusMode=false;
+async function modeHapus(on){
+  const rows=await dbByDate($('tgl').value);
+  if(on&&!rows.some(v=>v.terkirim)){setStatus($('st2'),'info','Belum ada kunjungan yang sudah terkirim di tanggal ini. Kirim laporan dulu.');return}
+  hapusMode=on;render();
+}
+function hitungSel(){const n=document.querySelectorAll('.chk:checked').length;const b=$('btnHapusSel');if(b){b.textContent='🗑 Hapus '+n+' terpilih';b.disabled=!n}}
+function pilihSemua(){document.querySelectorAll('input.chk').forEach(c=>c.checked=true);hitungSel()}
+async function hapusTerpilih(){
+  const ids=[...document.querySelectorAll('.chk:checked')].map(c=>c.dataset.id);if(!ids.length)return;
+  if(!confirm('Hapus '+ids.length+' kunjungan dari HP ini?\n\nData tetap aman di laporan WA & rekap SKAI.'))return;
+  for(const id of ids){const v=await dbGet(id);if(v&&v.terkirim)await dbDel(id)}
+  hapusMode=false;await render();setStatus($('st2'),'ok',ids.length+' kunjungan dihapus dari HP ✓');
+}
+async function zoomFoto(id){const v=await dbGet(id);if(!v)return;$('zoomImg').src=v.fotoBesar||v.foto;$('zoom').classList.add('on')}
+function tutupZoom(){$('zoom').classList.remove('on');$('zoomImg').removeAttribute('src')}
+async function hapus(id){const v=await dbGet(id);if(v&&v.terkirim){setStatus($('st2'),'info','Kunjungan yang sudah dikirim dihapus lewat tombol 🗑 Hapus riwayat.');return}
+  if(confirm('Hapus kunjungan ini? (belum dikirim)')){await dbDel(id);render()}}
 
 async function sha256(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 
@@ -306,7 +357,11 @@ async function resetApp(){
   localStorage.removeItem('ao_profil');location.reload();
 }
 
-openDB().then(tampil).catch(e=>document.body.innerHTML='<p style="padding:20px">Browser tidak mendukung penyimpanan: '+e+'</p>');
+async function bersihFotoLama(){
+  try{const batas=tglLokal(new Date(Date.now()-7*864e5));const all=await dbAll();
+    for(const v of all){if(v.terkirim&&v.fotoBesar&&v.tanggal<batas){delete v.fotoBesar;await dbPut(v)}}}catch(e){}
+}
+openDB().then(()=>{bersihFotoLama();return tampil()}).catch(e=>document.body.innerHTML='<p style="padding:20px">Browser tidak mendukung penyimpanan: '+e+'</p>');
 </script>
 </body>
 </html>
