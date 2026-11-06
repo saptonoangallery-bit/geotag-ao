@@ -130,11 +130,8 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
     <option>Sosialisasi</option>
     <option>Lainnya</option>
   </select>
-  <div id="boxJml" style="display:none"><label>Jumlah nasabah dilayani <span style="color:#7a847e">(boleh diisi saat Closing)</span></label>
-  <input id="fJml" type="number" min="0" inputmode="numeric" placeholder="contoh: 20"></div>
-  <label>Keterangan singkat</label>
-  <textarea id="fKet" maxlength="100" placeholder="contoh: survei usaha warung, omzet ±3jt/hr, layak lanjut"></textarea>
-  <div class="cnt"><span id="cnt">0</span>/100</div>
+  <div class="muted" style="margin-top:8px">Keterangan hasil diisi saat <b>CLOSING</b>.</div>
+  <div class="row" style="align-items:center;margin-top:8px;background:#f3f6f4;border-radius:8px;padding:6px 10px"><div style="flex:1;font-size:13px">🛵 Kendaraan: <b id="kendMini">-</b></div><button class="ghost small" style="padding:4px 10px" onclick="bukaKend()">Ganti</button></div>
   <input type="file" id="cam" accept="image/*" capture="environment" style="display:none">
   <button class="primary" id="btnFoto" onclick="mulaiFoto()">📷 OPEN — MULAI KUNJUNGAN</button>
   <div class="status" id="st"></div>
@@ -183,14 +180,31 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
 <div class="modal" id="mKend"><div class="box">
   <h3>🛵 Kendaraan hari ini</h3>
   <div class="muted">Diisi sekali sehari sebelum kunjungan pertama. Boleh diubah bila berganti kendaraan.</div>
+  <div style="background:#e6f1fb;color:#0c447c;border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px">
+  <b>Kenapa diisi?</b> Foto kunjungan dicocokkan dengan GPS kendaraan. Kalau hari ini Anda tidak memakai motor dinas (rusak, nebeng, pakai mobil dinas), catat di sini <b>sebelum</b> kunjungan — supaya tidak dianggap janggal dan tidak perlu klarifikasi. <b>Ganti kendaraan di tengah hari? Tekan Ganti lagi.</b></div>
   <label class="opsi"><input type="radio" name="kj" value="motor">Motor dinas (ber-GPS)</label>
   <label class="opsi"><input type="radio" name="kj" value="mobil">Mobil dinas</label>
-  <label class="opsi"><input type="radio" name="kj" value="bareng">Bareng AO lain</label>
+  <label class="opsi"><input type="radio" name="kj" value="bareng">Bareng / nebeng AO lain</label>
   <label class="opsi"><input type="radio" name="kj" value="lain">Kendaraan lain / pribadi</label>
-  <div id="kendKetBox" style="display:none"><label id="kendKetLbl">Keterangan</label><input id="kendKet" maxlength="60"></div>
+  <div id="boxMobil" style="display:none"><label>Pilih mobil dinas</label><select id="kMobil"><option value="">— pilih mobil —</option>
+    <option>L 1269 CBM (Avanza)</option><option>L 1267 CBM (Calya)</option><option>L 1911 CBC (Zenix)</option><option>L 1916 JB (Kas Keliling)</option></select></div>
+  <div id="boxBareng" style="display:none"><label>Bareng siapa?</label><select id="kBareng"><option value="">— pilih AO —</option></select></div>
+  <div id="kendKetBox" style="display:none"><label>Alasan (wajib), mis. motor dinas rusak</label><input id="kendKet" maxlength="60"></div>
   <div style="height:10px"></div>
   <button class="primary" onclick="simpanKend()">Simpan</button>
   <div class="status" id="stK"></div>
+</div></div>
+<div class="modal" id="mClose"><div class="box">
+  <h3 id="mCloseJudul">📷 CLOSING</h3>
+  <div class="muted" id="mCloseSub"></div>
+  <div id="boxJml" style="display:none"><label>Jumlah nasabah dilayani</label>
+  <input id="fJml" type="number" min="0" inputmode="numeric" placeholder="contoh: 20"></div>
+  <label>Keterangan HASIL kunjungan (wajib)</label>
+  <textarea id="fKet" maxlength="100" placeholder="contoh: janji bayar 15/11 Rp500rb / setor 18 nasabah, 2 rekening baru"></textarea>
+  <div class="cnt"><span id="cnt">0</span>/100</div>
+  <button class="orange" style="width:100%" onclick="lanjutClosing()">📷 Ambil foto CLOSING</button>
+  <button class="ghost" style="width:100%;margin-top:6px" onclick="$('mClose').classList.remove('on')">Batal</button>
+  <div class="status" id="stC"></div>
 </div></div>
 <div id="zoom" onclick="tutupZoom()"><img id="zoomImg" alt=""><button class="ghost" onclick="tutupZoom()">Tutup</button></div>
 <script>
@@ -243,39 +257,55 @@ let lastPos=null;
 if('geolocation' in navigator){navigator.geolocation.watchPosition(p=>lastPos=p,()=>{},{enableHighAccuracy:true,maximumAge:0,timeout:60000})}
 
 const JML_KEG=['Funding Sekolah','Funding Pasar','Marketing','Sosialisasi'];
-$('fKegiatan').addEventListener('change',()=>{$('boxJml').style.display=JML_KEG.includes($('fKegiatan').value)?'':'none'});
+const DAFTAR_AO=["Wahyudi","Dodik Bagus Mantra","Boris Andrianto","Muhammad Aditya Septian","Nur Komarudin","Yudha Aditya Mahardhika","Andri Priyono","Muhammad Fatih","M. Arifuddin","Firdaus Ramadhan","Arif Budi Setiyawan","Pandu Eka Nugroho","Widi Hidayat","Rizqi Maghrabi","Achmad Aqsal Refansyah Finarno","Mohamad Rokhim","Mohammad Najikh","Ainul Yakin","Ryan Fitrah Hanugrah","Suprayitno"];
+DAFTAR_AO.slice().sort().forEach(n=>{const o=document.createElement('option');o.textContent=n;$('kBareng').appendChild(o)});
 let MODE=null,JALAN=null;
 function kendHari(t){try{return JSON.parse(localStorage.getItem('ao_kend_uji_'+t))||[]}catch(e){return []}}
-const KJ={motor:'Motor dinas (GPS)',mobil:'Mobil dinas',bareng:'Bareng AO lain',lain:'Kendaraan lain / pribadi'};
+const KJ={motor:'Motor dinas (GPS)',mobil:'Mobil dinas',bareng:'Bareng',lain:'Kendaraan lain / pribadi'};
 function teksKend(k){return k?KJ[k.jenis]+(k.ket?' — '+k.ket:''):''}
 function bukaKend(){$('mKend').classList.add('on');const k=kendHari(tglLokal(new Date())).slice(-1)[0];
-  document.querySelectorAll('input[name=kj]').forEach(r=>{r.checked=!!k&&r.value===k.jenis});$('kendKet').value=k?k.ket||'':'';aturKetKend()}
+  document.querySelectorAll('input[name=kj]').forEach(r=>{r.checked=!!k&&r.value===k.jenis});
+  $('kendKet').value=k&&k.jenis==='lain'?k.ket:'';$('kMobil').value=k&&k.jenis==='mobil'?k.ket:'';$('kBareng').value=k&&k.jenis==='bareng'?k.ket:'';aturKetKend()}
 function aturKetKend(){const v=(document.querySelector('input[name=kj]:checked')||{}).value;
-  $('kendKetBox').style.display=(v==='bareng'||v==='lain'||v==='mobil')?'':'none';
-  $('kendKetLbl').textContent=v==='bareng'?'Bareng siapa? (nama AO)':v==='lain'?'Alasan (wajib), mis. motor dinas rusak':'Mobil apa? (boleh kosong)'}
+  $('kendKetBox').style.display=v==='lain'?'':'none';$('boxMobil').style.display=v==='mobil'?'':'none';$('boxBareng').style.display=v==='bareng'?'':'none'}
 document.querySelectorAll('input[name=kj]').forEach(r=>r.addEventListener('change',aturKetKend));
-function simpanKend(){const v=(document.querySelector('input[name=kj]:checked')||{}).value;const ket=$('kendKet').value.trim();
+function simpanKend(){const v=(document.querySelector('input[name=kj]:checked')||{}).value;
+  const ket=v==='lain'?$('kendKet').value.trim():v==='mobil'?$('kMobil').value:v==='bareng'?$('kBareng').value:'';
   if(!v){setStatus($('stK'),'err','Pilih salah satu.');return}
-  if((v==='bareng'||v==='lain')&&ket.length<3){setStatus($('stK'),'err',v==='bareng'?'Isi nama AO yang dibonceng/diikuti.':'Isi alasan memakai kendaraan lain.');return}
+  if(v==='mobil'&&!ket){setStatus($('stK'),'err','Pilih mobil dinas yang dipakai.');return}
+  if(v==='bareng'&&!ket){setStatus($('stK'),'err','Pilih nama AO yang diikuti.');return}
+  if(v==='lain'&&ket.length<3){setStatus($('stK'),'err','Isi alasan memakai kendaraan lain.');return}
+  const lama=kendHari(tglLokal(new Date())).slice(-1)[0];if(lama&&lama.jenis===v&&(lama.ket||'')===ket){$('mKend').classList.remove('on');return}
   const t=tglLokal(new Date());const a=kendHari(t);a.push({waktu:new Date().toISOString(),jam:jamLokal(new Date()).slice(0,5),jenis:v,ket:v==='motor'?'':ket});
   localStorage.setItem('ao_kend_uji_'+t,JSON.stringify(a));$('mKend').classList.remove('on');$('stK').className='status';tampilKend();
   if(MODE&&MODE.lanjut){MODE=null;mulaiFoto()}}
-function tampilKend(){const k=kendHari(tglLokal(new Date())).slice(-1)[0];$('kendTeks').innerHTML=k?esc(teksKend(k)):'<span style="color:#a32d2d">belum diisi</span>'}
+function tampilKend(){const a=kendHari(tglLokal(new Date()));const k=a.slice(-1)[0];
+  $('kendTeks').innerHTML=k?esc(teksKend(k))+(a.length>1?` <span class="muted">(ganti ${a.length-1}×, terakhir ${k.jam})</span>`:''):'<span style="color:#a32d2d">belum diisi</span>';
+  $('kendMini').innerHTML=k?esc(teksKend(k)):'<span style="color:#a32d2d">belum diisi</span>'}
 function gulirKe(id){$(id).scrollIntoView({behavior:'smooth',block:'start'})}
 
 async function mulaiFoto(){
   const st=$('st');
   if(!$('fNasabah').value.trim()){setStatus(st,'err','Isi nama nasabah / lokasi dulu.');return}
   if(!$('fKegiatan').value){setStatus(st,'err','Pilih jenis kegiatan dulu.');return}
-  if(!$('fKet').value.trim()){setStatus(st,'err','Isi keterangan singkat dulu.');return}
   if(!('geolocation' in navigator)){setStatus(st,'err','HP ini tidak mendukung GPS di browser.');return}
   if(!kendHari(tglLokal(new Date())).length){MODE={lanjut:true};bukaKend();setStatus($('stK'),'info','Isi kendaraan hari ini dulu, lalu lanjut foto OPEN.');return}
   if(JALAN&&!confirm('Kunjungan "'+JALAN.nasabah+'" belum CLOSING.\n\nKalau lanjut, kunjungan itu ditutup otomatis sebagai "Tanpa Closing" dan TIDAK BISA dibuka lagi.\n\nLanjut buka kunjungan baru?'))return;
   MODE={tahap:'open'};$('cam').value='';$('cam').click();
 }
-function fotoTahap(t){if(!JALAN)return;if(t==='action'&&JALAN.action){setStatus($('stJ'),'info','Foto ACTION sudah ada.');return}
+function fotoTahap(t){if(!JALAN)return;if(t==='closing'){bukaClosing(false);return}if(t==='action'&&JALAN.action){setStatus($('stJ'),'info','Foto ACTION sudah ada.');return}
   MODE={tahap:t,id:JALAN.id};$('cam').value='';$('cam').click()}
-function tidakDitemui(){if(!JALAN)return;if(!confirm('Nasabah tidak ditemui?\nLanjut foto CLOSING (tanpa ACTION).'))return;MODE={tahap:'closing',id:JALAN.id,tidak:true};$('cam').value='';$('cam').click()}
+let CL=null;
+function bukaClosing(tidak){if(!JALAN)return;CL={id:JALAN.id,tidak:!!tidak};
+  $('mCloseJudul').textContent=tidak?'📷 CLOSING — nasabah tidak ditemui':'📷 CLOSING';
+  $('mCloseSub').innerHTML=esc(JALAN.nasabah)+' • '+esc(JALAN.kegiatan)+' • OPEN '+JALAN.jam.slice(0,5);
+  $('boxJml').style.display=!tidak&&JML_KEG.includes(JALAN.kegiatan)?'':'none';$('fJml').value=JALAN.jml!=null?JALAN.jml:'';
+  $('fKet').value='';$('cnt').textContent='0';$('fKet').placeholder=tidak?'contoh: rumah kosong, kata tetangga ke luar kota':'contoh: janji bayar 15/11 Rp500rb / setor 18 nasabah, 2 rekening baru';
+  $('stC').className='status';$('mClose').classList.add('on')}
+function tidakDitemui(){bukaClosing(true)}
+function lanjutClosing(){const k=$('fKet').value.trim();if(k.length<3){setStatus($('stC'),'err','Isi keterangan hasil kunjungan dulu.');return}
+  let jml=null;if($('boxJml').style.display!=='none'){jml=parseInt($('fJml').value,10);if(!(jml>=0)){setStatus($('stC'),'err','Isi jumlah nasabah yang dilayani.');return}}
+  MODE={tahap:'closing',id:CL.id,tidak:CL.tidak,ket:k,jml};$('mClose').classList.remove('on');$('cam').value='';$('cam').click()}
 async function batalKunjungan(){if(!JALAN)return;const a=prompt('Alasan membatalkan kunjungan "'+JALAN.nasabah+'":\n(kunjungan batal TIDAK dihitung)');
   if(a===null)return;if(a.trim().length<5){setStatus($('stJ'),'err','Alasan minimal 5 huruf.');return}
   const v=await dbGet(JALAN.id);v.status='batal';v.alasanBatal=a.trim();v.waktuBatal=new Date().toISOString();await dbPut(v);await render();setStatus($('st'),'info','Kunjungan dibatalkan (alasan tercatat).')}
@@ -346,21 +376,19 @@ $('cam').addEventListener('change',async e=>{
     let v;
     if(m.tahap==='open'){
       v={id:now.getTime()+'-'+Math.random().toString(36).slice(2,7),ao:p.nama,kantor:p.kantor||'',tanggal:tglLokal(now),
-        nasabah:$('fNasabah').value.trim(),rek:$('fRek').value.trim(),kegiatan:$('fKegiatan').value,ket:$('fKet').value.trim(),status:'buka'};
-      const j=parseInt($('fJml').value,10);if(JML_KEG.includes(v.kegiatan)&&j>=0)v.jml=j;
+        nasabah:$('fNasabah').value.trim(),rek:$('fRek').value.trim(),kegiatan:$('fKegiatan').value,ket:'',status:'buka'};
     }else{v=await dbGet(m.id);if(!v||v.status!=='buka'){setStatus(st,'err','Kunjungan sudah ditutup.');return}}
     setStatus(st,'info','Mencari alamat terdekat…');
     f.alamat=await cariAlamat(f.lat,f.lon);
     setStatus(st,'info','Membuat cap geotag…');
-    const img=await muatGambar(file);const cv=capFoto(img,{...v,...f,tanggal:tglLokal(now),tahapLabel:m.tahap.toUpperCase()});img.done();
+    const img=await muatGambar(file);const cv=capFoto(img,{...v,...f,ket:m.tahap==='closing'?(m.ket||''):(v.ket||''),tanggal:tglLokal(now),tahapLabel:m.tahap.toUpperCase()});img.done();
     f.foto=kecilkan(cv,520,.6);f.fotoBesar=cv.toDataURL('image/jpeg',.8);cv.width=cv.height=1;
     if(m.tahap==='open'){
       if(JALAN&&JALAN.id!==v.id){const o=await dbGet(JALAN.id);if(o&&o.status==='buka'){o.status='tanpa_closing';o.ditutupOtomatis=f.waktu;await dbPut(o)}}
       Object.assign(v,f);
-      $('fNasabah').value='';$('fRek').value='';$('fKegiatan').value='';$('fKet').value='';$('fJml').value='';$('boxJml').style.display='none';$('cnt').textContent='0';
+      $('fNasabah').value='';$('fRek').value='';$('fKegiatan').value='';
     }else if(m.tahap==='action'){v.action=f}
-    else{v.closing=f;v.status=m.tidak?'tidak_ditemui':'lengkap';v.jarakClosing=Math.round(jarakM(v.lat,v.lon,f.lat,f.lon));
-      if(JML_KEG.includes(v.kegiatan)&&v.jml==null){const j=prompt('Jumlah nasabah yang dilayani di '+v.nasabah+'? (angka)');const n=parseInt(j,10);if(n>=0)v.jml=n}}
+    else{v.closing=f;v.status=m.tidak?'tidak_ditemui':'lengkap';v.jarakClosing=Math.round(jarakM(v.lat,v.lon,f.lat,f.lon));v.ket=m.ket||'';if(m.jml!=null)v.jml=m.jml}
     await dbPut(v);
     $('tgl').value=v.tanggal;await render();
     const pesan={open:'OPEN tersimpan ✓ '+f.jam+'. Saat melayani: foto ACTION. Sebelum pergi: foto CLOSING.',action:'ACTION tersimpan ✓ '+f.jam+'. Jangan lupa CLOSING sebelum pergi.',
@@ -410,7 +438,7 @@ async function render(){
   L.innerHTML=rows.map((v,i)=>{const sl=STL[v.status]||['','st-i'];const du=durasi(v);
     return `<div class="visit" style="display:block">${hapusMode?(v.terkirim?`<input type="checkbox" class="chk" style="float:right;margin-top:0" data-id="${v.id}" onchange="hitungSel()">`:`<span class="chk" title="belum dikirim" style="font-size:20px;float:right;margin-top:0">⛔</span>`):''}
     <div class="t"><b>${i+1}. ${esc(v.nasabah)}</b>${v.rek?' <span class="muted">('+esc(v.rek)+')</span>':''} <span class="pill ${sl[1]}">${sl[0]}</span><br>
-    <span class="pill">${esc(v.kegiatan)}</span>${v.jml!=null?' <span class="pill st-i">'+v.jml+' nasabah</span>':''} <span class="muted">${v.jam.slice(0,5)}${v.closing?'–'+v.closing.jam.slice(0,5):''}${du!=null?' • '+fDur(du):''}</span><br>${esc(v.ket)}
+    <span class="pill">${esc(v.kegiatan)}</span>${v.jml!=null?' <span class="pill st-i">'+v.jml+' nasabah</span>':''} <span class="muted">${v.jam.slice(0,5)}${v.closing?'–'+v.closing.jam.slice(0,5):''}${du!=null?' • '+fDur(du):''}</span><br>${v.ket?esc(v.ket):(v.status==='buka'?'<span class="muted">hasil diisi saat CLOSING</span>':'<span class="muted">(tanpa keterangan hasil)</span>')}
     ${v.alasanBatal?'<br><span class="muted">Alasan batal: '+esc(v.alasanBatal)+'</span>':''}
     ${tigaFoto(v)}
     <span class="muted">${v.alamat?esc(v.alamat):'<span class="pill warn">alamat belum terbaca</span>'} • ±${Math.round(v.akurasi)} m${v.jarakClosing>200?' • <b>Closing '+v.jarakClosing+' m dari Open</b>':''}</span>
