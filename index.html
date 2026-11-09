@@ -161,7 +161,7 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
     <li>Pagi: isi <b>Kendaraan hari ini</b>.</li>
     <li>Tiba di lokasi: isi nama, kegiatan, keterangan → <b>📷 OPEN</b>.</li>
     <li>Saat melayani: <b>📷 ACTION</b> (cukup 1 contoh).</li>
-    <li>Sebelum pergi: <b>📷 CLOSING</b>. Tanpa Closing, kunjungan tidak dihitung.</li>
+    <li>Sebelum pergi: <b>📷 CLOSING</b>. Lupa ACTION / CLOSING tetap dihitung, tapi diberi catatan.</li>
     <li>Sore hari tekan <b>Kirim laporan ke WA</b>, pilih WhatsApp, kirim ke Kepala SKAI.</li>
   </ol>
   <div class="muted">Data tersimpan di HP ini. Jangan hapus data browser Chrome sebelum laporan terkirim.</div>
@@ -293,7 +293,7 @@ async function mulaiFoto(){
   if(JALAN&&!confirm('Kunjungan "'+JALAN.nasabah+'" belum CLOSING.\n\nKalau lanjut, kunjungan itu ditutup otomatis sebagai "Tanpa Closing" dan TIDAK BISA dibuka lagi.\n\nLanjut buka kunjungan baru?'))return;
   MODE={tahap:'open'};$('cam').value='';$('cam').click();
 }
-function fotoTahap(t){if(!JALAN)return;if(t==='closing'){bukaClosing(false);return}if(t==='action'&&JALAN.action){setStatus($('stJ'),'info','Foto ACTION sudah ada.');return}
+function fotoTahap(t){if(!JALAN)return;if(t==='closing'){if(!JALAN.action&&confirm('Belum ada foto ACTION untuk '+JALAN.nasabah+'.\n\nOK = ambil foto ACTION dulu\nBatal = lanjut CLOSING tanpa ACTION (tetap dihitung, diberi catatan)')){t='action'}else{bukaClosing(false);return}}if(t==='action'&&JALAN.action){setStatus($('stJ'),'info','Foto ACTION sudah ada.');return}
   MODE={tahap:t,id:JALAN.id};$('cam').value='';$('cam').click()}
 let CL=null;
 function bukaClosing(tidak){if(!JALAN)return;CL={id:JALAN.id,tidak:!!tidak};
@@ -388,7 +388,7 @@ $('cam').addEventListener('change',async e=>{
       Object.assign(v,f);
       $('fNasabah').value='';$('fRek').value='';$('fKegiatan').value='';
     }else if(m.tahap==='action'){v.action=f}
-    else{v.closing=f;v.status=m.tidak?'tidak_ditemui':'lengkap';v.jarakClosing=Math.round(jarakM(v.lat,v.lon,f.lat,f.lon));v.ket=m.ket||'';if(m.jml!=null)v.jml=m.jml}
+    else{v.closing=f;v.status=m.tidak?'tidak_ditemui':'lengkap';v.jarakClosing=Math.round(jarakM(v.lat,v.lon,f.lat,f.lon));v.ket=m.ket||'';if(m.jml!=null)v.jml=m.jml;if(!m.tidak&&!v.action)v.tanpaAction=true}
     await dbPut(v);
     $('tgl').value=v.tanggal;await render();
     const pesan={open:'OPEN tersimpan ✓ '+f.jam+'. Saat melayani: foto ACTION. Sebelum pergi: foto CLOSING.',action:'ACTION tersimpan ✓ '+f.jam+'. Jangan lupa CLOSING sebelum pergi.',
@@ -411,7 +411,7 @@ async function simpanFoto(id){
     a.download='GEOTAG_'+t+'_'+v.ao.replace(/\W+/g,'_')+'_'+v.tanggal+'_'+o.jam.replace(/:/g,'')+'.jpg';document.body.appendChild(a);a.click();a.remove();
     await new Promise(r=>setTimeout(r,400))}}
 
-const STL={buka:['⏳ belum Closing','st-buka'],lengkap:['✓ lengkap','st-lengkap'],tidak_ditemui:['✓ tidak ditemui','st-i'],tanpa_closing:['⏹ tanpa Closing','st-buka'],tidak_ditutup:['✕ tidak ditutup','st-x'],batal:['✕ batal','st-x']};
+const STL={buka:['⏳ belum Closing','st-buka'],lengkap:['✓ lengkap','st-lengkap'],lengkapA:['◐ tanpa ACTION (dicatat)','st-buka'],tidak_ditemui:['✓ tidak ditemui','st-i'],tanpa_closing:['⏹ tanpa Closing','st-buka'],tidak_ditutup:['⚠ tidak ditutup (dicatat)','st-buka'],batal:['✕ batal','st-x']};
 function durasi(v){const akhir=v.closing?v.closing.waktu:(v.action?v.action.waktu:null);return akhir?(new Date(akhir)-new Date(v.waktu))/6e4:null}
 function tigaFoto(v){if(!v.status)return `<div class="tiga"><div><span class="tahap">FOTO</span><br><img src="${v.foto}" onclick="zoomFoto('${v.id}','OPEN')" alt="">${v.jam.slice(0,5)} <span class="muted">(format lama)</span></div><div></div><div></div></div>`;const sl=(t,o)=>`<div><span class="tahap">${t}</span><br>${o?`<img src="${o.foto}" onclick="zoomFoto('${v.id}','${t}')" alt="">${o.jam.slice(0,5)}`:'<span class="kosong">belum</span>&nbsp;'}</div>`;
   return `<div class="tiga">${sl('OPEN',v)}${sl('ACTION',v.action)}${sl('CLOSING',v.closing)}</div>`}
@@ -435,7 +435,7 @@ async function render(){
   if(!rows.length){L.innerHTML='<div class="muted">Belum ada kunjungan di tanggal ini.</div>';$('btnKirim').disabled=true;return}
   $('btnKirim').disabled=false;
   hapusMode=hapusMode&&rows.some(v=>v.terkirim);$('selbar').classList.toggle('on',hapusMode);$('btnModeHapus').style.display=hapusMode?'none':'';
-  L.innerHTML=rows.map((v,i)=>{const sl=STL[v.status]||['','st-i'];const du=durasi(v);
+  L.innerHTML=rows.map((v,i)=>{const sl=(v.status==='lengkap'&&v.tanpaAction?STL.lengkapA:STL[v.status])||['','st-i'];const du=durasi(v);
     return `<div class="visit" style="display:block">${hapusMode?(v.terkirim?`<input type="checkbox" class="chk" style="float:right;margin-top:0" data-id="${v.id}" onchange="hitungSel()">`:`<span class="chk" title="belum dikirim" style="font-size:20px;float:right;margin-top:0">⛔</span>`):''}
     <div class="t"><b>${i+1}. ${esc(v.nasabah)}</b>${v.rek?' <span class="muted">('+esc(v.rek)+')</span>':''} <span class="pill ${sl[1]}">${sl[0]}</span><br>
     <span class="pill">${esc(v.kegiatan)}</span>${v.jml!=null?' <span class="pill st-i">'+v.jml+' nasabah</span>':''} <span class="muted">${v.jam.slice(0,5)}${v.closing?'–'+v.closing.jam.slice(0,5):''}${du!=null?' • '+fDur(du):''}</span><br>${v.ket?esc(v.ket):(v.status==='buka'?'<span class="muted">hasil diisi saat CLOSING</span>':'<span class="muted">(tanpa keterangan hasil)</span>')}
@@ -471,7 +471,7 @@ async function sha256(s){const b=await crypto.subtle.digest('SHA-256',new TextEn
 async function kirim(){
   const st=$('st2');const d=$('tgl').value;const rows=await dbByDate(d);if(!rows.length)return;
   const buka=rows.filter(v=>v.status==='buka');
-  if(buka.length&&!confirm(buka.length+' kunjungan belum CLOSING ('+buka.map(v=>v.nasabah).join(', ')+').\nKunjungan tanpa Closing TIDAK DIHITUNG.\n\nOK = kirim apa adanya\nBatal = tutup dulu'))return;
+  if(buka.length&&!confirm(buka.length+' kunjungan belum CLOSING ('+buka.map(v=>v.nasabah).join(', ')+').\nKunjungan tanpa Closing tetap dihitung, tapi diberi catatan.\n\nOK = kirim apa adanya\nBatal = tutup dulu'))return;
   const p=profil();
   // coba lengkapi alamat yang kosong
   for(const v of rows){if(!v.alamat){setStatus(st,'info','Melengkapi alamat…');v.alamat=await cariAlamat(v.lat,v.lon);if(v.alamat)await dbPut(v)}}
