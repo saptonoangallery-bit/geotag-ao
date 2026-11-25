@@ -261,7 +261,7 @@ DAFTAR_AO.slice().sort().forEach(n=>{const o=document.createElement('option');o.
 let MODE=null,JALAN=null;
 function kendHari(t){try{return JSON.parse(localStorage.getItem('ao_kend_'+t))||[]}catch(e){return []}}
 /* ---------- kirim otomatis ke server (setiap OK) ---------- */
-const SERVER='https://script.google.com/macros/s/AKfycbzMVDF5oii60SKZflp9q-WuPGnL-dBnMXYSpuRffNmYh-tUezCIZpd7RlYJh6ReIiU1/exec';
+const SERVER='https://geotag-ao.lap-geotag-ao.workers.dev/';
 const KQ=UJI?'ao_antre_uji':'ao_antre';
 const FINAL=['lengkap','tidak_ditemui','batal','tanpa_closing','tidak_ditutup'];
 function antre(){try{return JSON.parse(localStorage.getItem(KQ))||[]}catch(e){return []}}
@@ -274,7 +274,7 @@ async function antrekan(v,jenis){if(!v)return;jenis=jenis||'kunjungan';const ver
   simpanAntre(a);sinkron()}
 let SYNC=false;
 async function sinkron(){
-  if(SYNC||!SERVER||(navigator.onLine===false))return;SYNC=true;
+  if(SYNC||!SERVER||(navigator.onLine===false))return;SYNC=true;let lancar=true;
   try{const p=profil();if(!p)return;
     for(const q of antre()){
       let v=q.jenis==='hapus'?q.data:await dbGet(q.id);
@@ -282,11 +282,11 @@ async function sinkron(){
       if(!v){buang();continue}
       const isi={app:'geotag-ao-banksau',versi:2,uji:UJI,jenis:q.jenis,ao:p.nama,kantor:p.kantor||'',tanggal:v.tanggal,kendaraan:kendHari(v.tanggal),
         kunjungan:q.jenis==='hapus'?v:bersihV(v),kirimHP:new Date().toISOString()};
-      let j;try{const r=await fetch(SERVER,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(isi),redirect:'follow'});j=await r.json()}catch(e){break}
+      let j;try{const r=await fetch(SERVER,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(isi),redirect:'follow'});j=await r.json()}catch(e){lancar=false;break}
       if(j&&j.ok){buang();if(q.jenis!=='hapus'){const w=await dbGet(q.id);if(w&&w._q===q.ver){w.srv=j.terima;if(FINAL.includes(w.status))w.terkirim=true;delete w._q;await dbPut(w)}}}
       else if(j&&/tidak lengkap|bukan aplikasi|id kosong/.test(j.pesan||''))buang();
-      else break}
-  }catch(e){}finally{SYNC=false;cekWA()}}
+      else{lancar=false;break}}
+  }catch(e){lancar=false}finally{SYNC=false;cekWA();if(lancar&&antre().length)setTimeout(sinkron,1500)}}
 async function cekWA(){try{const d=$('tgl').value;const sisa=antre().filter(q=>q.tgl===d);const jam=new Date().getHours();
   const lama=sisa.filter(q=>Date.now()-q.ver>30*6e4);const tampil=lama.length&&(d<tglLokal(new Date())||jam>=17);
   $('btnKirim').style.display=tampil?'':'none';$('btnKirim').textContent='⚠ '+lama.length+' kunjungan belum terkirim — kirim via WA'}catch(e){}}
