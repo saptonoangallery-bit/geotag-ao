@@ -550,13 +550,14 @@ async function bersihFotoLama(){
     for(const v of all){if(v.terkirim&&v.tanggal<batas&&(v.fotoBesar||(v.action&&v.action.fotoBesar)||(v.closing&&v.closing.fotoBesar))){delete v.fotoBesar;if(v.action)delete v.action.fotoBesar;if(v.closing)delete v.closing.fotoBesar;await dbPut(v)}}}catch(e){}
   try{const hari=tglLokal(new Date());const all=await dbAll();for(const v of all){if(v.status==='buka'&&v.tanggal<hari){v.status='tidak_ditutup';await dbPut(v);await antrekan(v)}}}catch(e){}
 }
-async function migrasiServer(){const K=UJI?'ao_migrasi_srv_uji':'ao_migrasi_srv';if(localStorage.getItem(K))return;
-  try{const batas=tglLokal(new Date(Date.now()-7*864e5));const all=await dbAll();const q=antre();const ada=new Set(q.map(x=>x.id));let ver=Date.now();
-    for(const v of all){if(!v.terkirim&&v.tanggal>=batas&&!ada.has(v.id)){q.push({id:v.id,jenis:'kunjungan',ver:ver,tgl:v.tanggal});v._q=ver++;await dbPut(v)}}
-    simpanAntre(q);localStorage.setItem(K,new Date().toISOString())}catch(e){}}
+/* setiap aplikasi dibuka: kunjungan 7 hari terakhir yang belum pernah sampai server (mis. dibuat di versi lama) dimasukkan antrean */
+async function migrasiServer(){
+  try{const batas=tglLokal(new Date(Date.now()-7*864e5));const all=await dbAll();const q=antre();const ada=new Set(q.map(x=>x.id));let ver=Date.now(),n=0;
+    for(const v of all){if(!v.terkirim&&!v.srv&&v.tanggal>=batas&&!ada.has(v.id)){q.push({id:v.id,jenis:'kunjungan',ver:ver,tgl:v.tanggal});v._q=ver++;v.terkirim=false;await dbPut(v);n++}}
+    if(n)simpanAntre(q)}catch(e){}}
 
 /* ---------- cek versi: saat dibuka & saat tanggal berganti ---------- */
-const VERSI='2026.11.26';let TGL_CEK=null;
+const VERSI='2026.11.26b';let TGL_CEK=null;
 function perbarui(){location.replace(location.pathname+'?v='+Date.now()+location.hash)}
 async function cekVersi(paksa){const t=tglLokal(new Date());if(!paksa&&TGL_CEK===t)return;
   try{const r=await fetch('versi.txt?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const v=(await r.text()).trim();TGL_CEK=t;
