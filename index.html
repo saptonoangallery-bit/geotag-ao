@@ -165,6 +165,8 @@ details summary{cursor:pointer;color:#0f6e56;font-size:14px}
     <li>Sebelum pergi: <b>📷 CLOSING</b>. Lupa ACTION / CLOSING tetap dihitung, tapi diberi catatan.</li>
     <li>Laporan <b>terkirim otomatis</b> setiap menekan OK. Bila ada yang gagal terkirim (tidak ada sinyal), sore hari muncul tombol <b>kirim via WA</b>.</li>
   </ol>
+  <div id="diagKirim" class="muted" style="font-size:12px;margin:8px 0;padding:8px;border:1px dashed #ccc;border-radius:8px"></div>
+  <button class="ghost small" style="width:100%;margin:0 0 4px" onclick="sinkron()">⇪ Kirim sekarang</button>
   <button class="ghost small" style="width:100%;margin:8px 0" onclick="perbarui()">⟳ Muat ulang / perbarui aplikasi</button>
   <div class="muted" style="font-size:12px">Versi aplikasi: <span id="lblVersi"></span></div>
   <div class="muted">Data tersimpan di HP ini. Jangan hapus data browser Chrome sebelum laporan terkirim.</div>
@@ -276,20 +278,33 @@ async function antrekan(v,jenis){if(!v)return;jenis=jenis||'kunjungan';const ver
   else{a.push({id:v.id,jenis,ver,tgl:v.tanggal});v._q=ver;v.terkirim=false;try{await dbPut(v)}catch(e){}}
   simpanAntre(a);sinkron()}
 let SYNC=false;
+let DIAG={ok:null,pesan:'',jam:''};
+function catatDiag(ok,pesan){DIAG={ok,pesan:String(pesan||'').slice(0,120),jam:new Date().toTimeString().slice(0,5)};tampilDiag()}
+function ditolak(){try{return JSON.parse(localStorage.getItem('ao_ditolak')||'[]')}catch(e){return []}}
+function tampilDiag(){try{const n=antre().length,t=ditolak().length;$('diagKirim').innerHTML='Antrean belum terkirim: <b>'+n+'</b>'+(t?' • <b style="color:#a32d2d">'+t+' ditolak server</b>':'')+(DIAG.jam?'<br>Terakhir dicoba '+DIAG.jam+': '+(DIAG.ok?'berhasil ✓':'<span style="color:#a32d2d">'+esc(DIAG.pesan)+'</span>'):'')}catch(e){}}
 async function sinkron(){
-  if(SYNC||!SERVER||(navigator.onLine===false))return;SYNC=true;let lancar=true;
-  try{const p=profil();if(!p)return;
+  if(SYNC||!SERVER||(navigator.onLine===false)){tampilDiag();return}SYNC=true;let lancar=true;
+  try{const p=profil();if(!p){catatDiag(false,'nama AO belum diisi');return}
     for(const q of antre()){
       let v=q.jenis==='hapus'?q.data:await dbGet(q.id);
       const buang=()=>simpanAntre(antre().filter(x=>!(x.id===q.id&&x.ver===q.ver)));
       if(!v){buang();continue}
       const isi={app:'geotag-ao-banksau',versi:2,uji:UJI,jenis:q.jenis,ao:p.nama,kantor:p.kantor||'',tanggal:v.tanggal,kendaraan:kendHari(v.tanggal),
         kunjungan:q.jenis==='hapus'?v:bersihV(v),kirimHP:new Date().toISOString()};
-      let j;try{const r=await fetch(SERVER,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(isi),redirect:'follow'});j=await r.json()}catch(e){lancar=false;break}
-      if(j&&j.ok){buang();if(q.jenis!=='hapus'){const w=await dbGet(q.id);if(w&&w._q===q.ver){w.srv=j.terima;if(FINAL.includes(w.status))w.terkirim=true;delete w._q;await dbPut(w)}}}
-      else if(j&&/tidak lengkap|bukan aplikasi|id kosong/.test(j.pesan||''))buang();
-      else{lancar=false;break}}
-  }catch(e){lancar=false}finally{SYNC=false;cekWA();if(lancar&&antre().length)setTimeout(sinkron,1500)}}
+      let r,j=null,salah='';
+      try{r=await fetch(SERVER,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(isi),redirect:'follow'})}
+      catch(e){lancar=false;catatDiag(false,'tidak tersambung ke server');break}
+      try{j=await r.json()}catch(e){salah='jawaban server tidak terbaca (HTTP '+r.status+')'}
+      if(j&&j.ok){buang();catatDiag(true);if(q.jenis!=='hapus'){const w=await dbGet(q.id);if(w&&w._q===q.ver){w.srv=j.terima;if(FINAL.includes(w.status))w.terkirim=true;delete w._q;await dbPut(w)}}continue}
+      if(j&&/tidak lengkap|bukan aplikasi|id kosong/.test(j.pesan||'')){buang();continue}
+      salah=salah||(j&&j.pesan)||'ditolak server';catatDiag(false,salah+' — '+(v.nasabah||q.id));
+      /* jangan menahan antrean: catat gagal, lanjut ke kunjungan berikutnya; setelah 5x gagal disisihkan */
+      const a=antre(),i=a.findIndex(x=>x.id===q.id&&x.ver===q.ver);
+      if(i>=0){a[i].gagal=(a[i].gagal||0)+1;
+        if(a[i].gagal>=5){const d=ditolak().filter(x=>x.id!==q.id);d.push({id:q.id,nasabah:v.nasabah||'',tgl:q.tgl,pesan:salah,waktu:new Date().toISOString()});localStorage.setItem('ao_ditolak',JSON.stringify(d.slice(-30)));a.splice(i,1)}
+        simpanAntre(a)}
+    }
+  }catch(e){lancar=false;catatDiag(false,'galat aplikasi: '+e.message)}finally{SYNC=false;cekWA();tampilDiag();if(lancar&&antre().some(x=>!(x.gagal>0)))setTimeout(sinkron,1500)}}
 async function cekWA(){try{const d=$('tgl').value;const sisa=antre().filter(q=>q.tgl===d);const jam=new Date().getHours();
   const lama=sisa.filter(q=>Date.now()-q.ver>30*6e4);const tampil=lama.length&&(d<tglLokal(new Date())||jam>=17);
   $('btnKirim').style.display=tampil?'':'none';$('btnKirim').textContent='⚠ '+lama.length+' kunjungan belum terkirim — kirim via WA'}catch(e){}}
@@ -557,7 +572,7 @@ async function migrasiServer(){
     if(n)simpanAntre(q)}catch(e){}}
 
 /* ---------- cek versi: saat dibuka & saat tanggal berganti ---------- */
-const VERSI='2026.11.26c';let TGL_CEK=null;
+const VERSI='2026.11.27';let TGL_CEK=null;
 function perbarui(){location.replace(location.pathname+'?v='+Date.now()+location.hash)}
 async function cekVersi(paksa){const t=tglLokal(new Date());if(!paksa&&TGL_CEK===t)return;
   try{const r=await fetch('versi.txt?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const v=(await r.text()).trim();TGL_CEK=t;
